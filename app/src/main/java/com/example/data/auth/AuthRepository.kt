@@ -6,7 +6,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
@@ -54,13 +53,21 @@ class AuthRepository(private val context: Context) {
     }
 
     suspend fun signInWithGoogle(activityContext: Context): Result<FirebaseUser> {
+        val webClientIdResourceId = context.resources.getIdentifier(
+            "default_web_client_id",
+            "string",
+            context.packageName
+        )
+        if (webClientIdResourceId == 0) {
+            return Result.failure(
+                IllegalStateException(
+                    "Google Sign-In is not configured: provide google-services.json with a web OAuth client ID."
+                )
+            )
+        }
+
         return try {
-            val serverClientId = try {
-                context.getString(R.string.default_web_client_id)
-            } catch (e: Exception) {
-                // Fallback to client ID if not generated
-                "999615440042-cnss453frc0cd5ckosieaau71plp2fh5.apps.googleusercontent.com"
-            }
+            val serverClientId = context.getString(webClientIdResourceId)
 
             val signInOption = GetSignInWithGoogleOption.Builder(serverClientId)
                 .build()
