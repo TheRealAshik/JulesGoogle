@@ -1,0 +1,131 @@
+name: Android CI / Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Test Android App
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Prepare environment configuration (.env)
+        run: |
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+            else
+              echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || 'MY_GEMINI_API_KEY' }}" > .env
+            fi
+          fi
+
+      - name: Prepare debug keystore
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Run unit & Robolectric tests
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Send APK to Telegram
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_TOKEN || secrets.BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TELEGRAM_TO || secrets.CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID || secrets.MESSAGE_THREAD_ID || secrets.TOPIC_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::warning ::Telegram secrets (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID) are not set. Skipping Telegram notification. Add them in GitHub Settings -> Secrets and variables -> Actions to enable automatic Telegram APK uploads."
+            exit 0
+          fi
+
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "::error ::No APK found to send to Telegram!"
+            exit 1
+          fi
+
+          FILE_SIZE=$(du -h "$APK_PATH" | cut -f1)
+          COMMIT_MSG=$(git log -1 --pretty=%s | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+
+          CAPTION="🚀 <b>Jules Android — Debug Build</b>
+
+📦 <b>File:</b> <code>$(basename "$APK_PATH")</code> ($FILE_SIZE)
+🌿 <b>Branch:</b> <code>${GITHUB_REF_NAME}</code>
+🔖 <b>Commit:</b> <code>${COMMIT_HASH}</code> — ${COMMIT_MSG}
+👤 <b>Triggered by:</b> ${GITHUB_ACTOR}
+🔗 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">View GitHub Action Run</a>"
+
+          EXTRA_ARGS=()
+          if [ -n "$TELEGRAM_THREAD_ID" ]; then
+            EXTRA_ARGS+=(-F "message_thread_id=${TELEGRAM_THREAD_ID}")
+          fi
+
+          echo "Uploading $APK_PATH ($FILE_SIZE) to Telegram..."
+          RESPONSE=$(curl --retry 3 --retry-delay 2 -s -w "\n%{http_code}" -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            "${EXTRA_ARGS[@]}" \
+            -F "document=@${APK_PATH}" \
+            -F "caption=${CAPTION}" \
+            -F "parse_mode=HTML")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ Successfully sent APK to Telegram!"
+          else
+            echo "::error ::Telegram API upload failed (HTTP $HTTP_CODE): $BODY"
+            exit 1
+          fi
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: jules-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7

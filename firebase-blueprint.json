@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "UserSavedPrompt": {
+      "title": "UserSavedPrompt",
+      "description": "User saved prompt templates for Jules sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "prompt": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "userId", "title", "prompt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences and settings synced across devices",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "themeMode": { "type": "string" },
+        "modelName": { "type": "string" },
+        "defaultRepo": { "type": "string" },
+        "defaultBranch": { "type": "string" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["userId"]
+    },
+    "UserSessionBookmark": {
+      "title": "UserSessionBookmark",
+      "description": "Bookmarked Jules session references",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "repo": { "type": "string" },
+        "lastVisited": { "type": "integer" }
+      },
+      "required": ["sessionId", "userId", "title"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/saved_prompts/{promptId}": {
+      "schema": "UserSavedPrompt",
+      "description": "Collection of prompt templates saved by the user"
+    },
+    "/users/{userId}/settings/{settingsId}": {
+      "schema": "UserSettings",
+      "description": "Preferences document for the user"
+    },
+    "/users/{userId}/session_bookmarks/{sessionId}": {
+      "schema": "UserSessionBookmark",
+      "description": "Bookmarked sessions for quick access"
+    }
+  }
+}

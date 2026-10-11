@@ -1,0 +1,6 @@
+{
+  "name": "Jules",
+  "description": "Autonomous coding agent client with ChatGPT-inspired mobile UX, multi-turn Gemini 3.1 Pro Copilot, and Firebase cloud sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
