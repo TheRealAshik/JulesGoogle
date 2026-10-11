@@ -82,13 +82,16 @@ jobs:
           COMMIT_MSG=$(git log -1 --pretty=%s | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
           COMMIT_HASH=$(git rev-parse --short HEAD)
 
-          CAPTION="🚀 <b>Jules Android — Debug Build</b>
-
-📦 <b>File:</b> <code>$(basename "$APK_PATH")</code> ($FILE_SIZE)
-🌿 <b>Branch:</b> <code>${GITHUB_REF_NAME}</code>
-🔖 <b>Commit:</b> <code>${COMMIT_HASH}</code> — ${COMMIT_MSG}
-👤 <b>Triggered by:</b> ${GITHUB_ACTOR}
-🔗 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">View GitHub Action Run</a>"
+          CAPTION=$(printf '%s\n\n📦 <b>File:</b> <code>%s</code> (%s)\n🌿 <b>Branch:</b> <code>%s</code>\n🔖 <b>Commit:</b> <code>%s</code> — %s\n👤 <b>Triggered by:</b> %s\n🔗 <a href="https://github.com/%s/actions/runs/%s">View GitHub Action Run</a>' \
+            "🚀 <b>Jules Android — Debug Build</b>" \
+            "$(basename "$APK_PATH")" \
+            "$FILE_SIZE" \
+            "$GITHUB_REF_NAME" \
+            "$COMMIT_HASH" \
+            "$COMMIT_MSG" \
+            "$GITHUB_ACTOR" \
+            "$GITHUB_REPOSITORY" \
+            "$GITHUB_RUN_ID")
 
           EXTRA_ARGS=()
           if [ -n "$TELEGRAM_THREAD_ID" ]; then
