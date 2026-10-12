@@ -8,11 +8,10 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.auth
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,28 +30,43 @@ sealed class AuthState {
 
 class AuthRepository(private val context: Context) {
 
-    private val auth: FirebaseAuth = Firebase.auth
+    private val auth: FirebaseAuth? = FirebaseApp.getApps(context).firstOrNull()?.let { app ->
+        FirebaseAuth.getInstance(app)
+    }
     private val credentialManager = CredentialManager.create(context)
 
     private val _isGuestMode = MutableStateFlow(false)
     val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
 
     fun authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-            trySend(firebaseAuth.currentUser)
+        val firebaseAuth = auth
+        if (firebaseAuth == null) {
+            trySend(null)
+            close()
+            return@callbackFlow
         }
-        auth.addAuthStateListener(listener)
-        awaitClose { auth.removeAuthStateListener(listener) }
+
+        val listener = FirebaseAuth.AuthStateListener { authInstance ->
+            trySend(authInstance.currentUser)
+        }
+        firebaseAuth.addAuthStateListener(listener)
+        awaitClose { firebaseAuth.removeAuthStateListener(listener) }
     }
 
     val currentUser: FirebaseUser?
-        get() = auth.currentUser
+        get() = auth?.currentUser
 
     fun setGuestMode(isGuest: Boolean) {
         _isGuestMode.value = isGuest
     }
 
     suspend fun signInWithGoogle(activityContext: Context): Result<FirebaseUser> {
+        val firebaseAuth = auth ?: return Result.failure(
+            IllegalStateException(
+                "Firebase is not configured. Add app/google-services.json for this app to enable Google Sign-In."
+            )
+        )
+
         val webClientIdResourceId = context.resources.getIdentifier(
             "default_web_client_id",
             "string",
@@ -87,7 +101,7 @@ class AuthRepository(private val context: Context) {
             ) {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                 val authCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-                val authResult = auth.signInWithCredential(authCredential).await()
+                val authResult = firebaseAuth.signInWithCredential(authCredential).await()
                 val user = authResult.user
                 if (user != null) {
                     _isGuestMode.value = false
@@ -108,7 +122,7 @@ class AuthRepository(private val context: Context) {
     }
 
     fun signOut() {
-        auth.signOut()
+        auth?.signOut()
         _isGuestMode.value = false
     }
 }

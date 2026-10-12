@@ -84,7 +84,7 @@ Firebase configuration is not included in this repository. To configure Google s
 
 Use the official [Firebase Android setup guide](https://firebase.google.com/docs/android/setup), [Google Services configuration guide](https://firebase.google.com/docs/android/google-services-plugin-and-file), and [Credential Manager Google sign-in guide](https://developer.android.com/identity/sign-in/credential-manager-siwg).
 
-The app's Gradle configuration allows a build to proceed when `google-services.json` is missing, but Google sign-in will not be configured. The authentication code specifically looks for the web OAuth client ID generated from the Firebase configuration. If you only need to compile the app, Firebase setup may not block the debug build; Firebase-backed features require a valid project configuration and service setup.
+The app's Gradle configuration allows a build to proceed when `google-services.json` is missing. The app can also launch in guest mode without a configured Firebase default app; Google sign-in will return a clear configuration error, and cloud-synced prompts will be unavailable until Firebase is configured. To enable these features, complete the Firebase setup above and install the matching `app/google-services.json`. The configuration must match application ID `com.aistudio.jules.ashik` and include the web OAuth client ID used by Google sign-in. A successful debug build does not verify Firebase runtime configuration.
 
 Firebase configuration files contain project-specific identifiers. Follow your team's repository policy for them, and never commit private credentials, service-account keys, passwords, or API keys.
 
