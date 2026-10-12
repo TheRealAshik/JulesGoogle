@@ -2,7 +2,7 @@ name: Android CI / Build
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "**" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
@@ -61,7 +61,7 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Send APK to Telegram
-        if: success()
+        if: success() && github.event_name == 'push'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_TOKEN || secrets.BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TELEGRAM_TO || secrets.CHAT_ID }}
