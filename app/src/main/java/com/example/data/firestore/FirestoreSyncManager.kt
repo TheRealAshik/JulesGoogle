@@ -3,6 +3,7 @@ package com.example.data.firestore
 import android.content.Context
 import android.util.Log
 import com.example.R
+import com.google.firebase.FirebaseApp
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.DocumentSnapshot
@@ -27,23 +28,35 @@ data class FirestorePrompt(
 
 class FirestoreSyncManager(private val context: Context) {
 
-    private val db: FirebaseFirestore by lazy {
-        val databaseId = try {
-            context.getString(R.string.firestore_database_id)
-        } catch (e: Exception) {
-            "ai-studio-android-jules-9bcdd3c3-0f00-4ccd-bf0c-4db90f2681a4"
+    private val db: FirebaseFirestore? by lazy {
+        val app = FirebaseApp.getApps(context).firstOrNull()
+        if (app == null) {
+            Log.i("FirestoreSyncManager", "Firebase is not configured; cloud prompt sync is unavailable.")
+            null
+        } else {
+            val databaseId = try {
+                context.getString(R.string.firestore_database_id)
+            } catch (e: Exception) {
+                "ai-studio-android-jules-9bcdd3c3-0f00-4ccd-bf0c-4db90f2681a4"
+            }
+            try {
+                FirebaseFirestore.getInstance(app, databaseId)
+            } catch (e: Exception) {
+                Log.w("FirestoreSyncManager", "Firebase Firestore is unavailable.", e)
+                null
+            }
         }
-        FirebaseFirestore.getInstance(databaseId)
     }
 
     fun observeSavedPrompts(userId: String): Flow<List<FirestorePrompt>> = callbackFlow {
-        if (userId.isBlank()) {
+        val firestore = db
+        if (userId.isBlank() || firestore == null) {
             trySend(emptyList())
             close()
             return@callbackFlow
         }
 
-        val ref = db.collection("users").document(userId).collection("saved_prompts")
+        val ref = firestore.collection("users").document(userId).collection("saved_prompts")
         val listener = ref.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 Log.w("FirestoreSyncManager", "Error listening to saved prompts: ${error.message}")
@@ -63,8 +76,9 @@ class FirestoreSyncManager(private val context: Context) {
 
     suspend fun savePrompt(userId: String, title: String, prompt: String, category: String = "General"): Boolean {
         if (userId.isBlank()) return false
+        val firestore = db ?: return false
         return try {
-            val docRef = db.collection("users").document(userId).collection("saved_prompts").document()
+            val docRef = firestore.collection("users").document(userId).collection("saved_prompts").document()
             val data = mapOf(
                 "userId" to userId,
                 "title" to title,
@@ -82,8 +96,9 @@ class FirestoreSyncManager(private val context: Context) {
 
     suspend fun deletePrompt(userId: String, promptId: String): Boolean {
         if (userId.isBlank() || promptId.isBlank()) return false
+        val firestore = db ?: return false
         return try {
-            db.collection("users").document(userId)
+            firestore.collection("users").document(userId)
                 .collection("saved_prompts").document(promptId)
                 .delete().await()
             true
@@ -95,8 +110,9 @@ class FirestoreSyncManager(private val context: Context) {
 
     suspend fun syncUserSettings(userId: String, settingsMap: Map<String, Any>): Boolean {
         if (userId.isBlank()) return false
+        val firestore = db ?: return false
         return try {
-            val docRef = db.collection("users").document(userId).collection("settings").document("preferences")
+            val docRef = firestore.collection("users").document(userId).collection("settings").document("preferences")
             docRef.set(settingsMap).await()
             true
         } catch (e: Exception) {
